@@ -12,7 +12,10 @@ import operator
 from enum import Enum
 from sklearn.model_selection import train_test_split
 from sklearn.utils import shuffle
+from dataclasses import dataclass
 from sklearn.model_selection import StratifiedKFold
+import matplotlib.pyplot as plt
+from matplotlib.pyplot import figure
 
 TEST_SET_SIZE = 0.3 # 1 - TEST_SET_SIZE (70%) - training set, TEST_SET_SIZE (30%) testing set
 VAL_SET_SIZE = 0.5  # 50% of testing set, it means     
@@ -23,15 +26,32 @@ def swap_target(x):
         return 1
     else:
         return 0
-    
+
 class DatasetSplittingType(Enum):
     kFOLD= 0
     TRAIN_TEST = 1
     TRAIN_VAL_TEST = 2
 
+def plotHistogram(data, title, xlabel, ylabel, color = '#0504aa'):
+    figure(figsize=(10, 8), dpi=300)
+    n, bins, patches = plt.hist(x=data, bins='auto', color=color, alpha=0.7, rwidth=0.85)
+    plt.grid(axis='both', alpha=0.75)
+    plt.xlabel(xlabel)
+    plt.ylabel(ylabel)
+    plt.title(title)
+    plt.show()
+
+def piePlot(data, legend, title):
+    figure(figsize=(10, 8), dpi=300)
+    plt.pie(data, labels = legend, autopct='%.2f') 
+    plt.grid(axis='both', alpha=0.75)
+    plt.title(title)
+    plt.show() 
+    
 class HemorrageDataset:
-    def __init__(self, diagnoseCsvPath, folderPath):
+    def __init__(self, diagnoseCsvPath, demographyCsvPath, folderPath):
         self.__diagnoseCSV = pd.read_csv(diagnoseCsvPath)
+        self.__demographyCsv = pd.read_csv(demographyCsvPath)
         self.__pathToWholeFolder = folderPath
         self.__trainDataForLoading = []
         self.__trainLabelsForLoading = []
@@ -135,7 +155,21 @@ class HemorrageDataset:
     
     def get_kFoldDataWithLabels(self):
         return self.__kFoldDataForLoading, self.__kFoldLabelsForLoading
-             
+
+    def countHealthyAndSickSliceDistribution(self):
+        diagnosed = self.__diagnoseCSV['Has_Hemorrhage'].value_counts()
+        return diagnosed 
+  
+    def countGenderDistribution(self):
+        gender = self.__demographyCsv['Gender'].value_counts()
+        return gender
+    
+    def countAgeDistribution(self):
+        age = self.__demographyCsv['Age\n(years)']
+        return age
+
+
+         
 # Create class for ml method - load images, preprocess, choose method and fit model 
 # another class for statistic and visualization -> acces private property: self._Parent__private(), self.__demographyCSV = pd.read_csv(demographyCsvPath)
 # generator for all
@@ -143,18 +177,28 @@ class HemorrageDataset:
 
 #########################################         
 basePath  = r'D:\Brain_JPG_Hemmorage\computed-tomography-images-for-intracranial-hemorrhage-detection-and-segmentation-1.0.0'
-csvPath = basePath + '\hemorrhage_diagnosis.csv'
-dataset = HemorrageDataset(csvPath, basePath) 
+diagnoseCsvPath = basePath + '\hemorrhage_diagnosis.csv'
+demographyCsvPath = basePath + '\patient_demographics.csv'
+dataset = HemorrageDataset(diagnoseCsvPath, demographyCsvPath, basePath) 
 # Prepare csv file  
 dataset.removeRecordFromDataset(84, 36)
 dataset.invertBinaryValues('No_Hemorrhage', 'Has_Hemorrhage')
-# Split dataset using chosen method
-dataset.splitDatasetBasedOnPatientsCases(DatasetSplittingType.TRAIN_VAL_TEST)
-trainData, trainLabels = dataset.get_trainDataWithLabels()
-testData, testLabels = dataset.get_testDataWithLabels()
-valData, valLabels = dataset.get_valDataWithLabels()
-dataset.splitDatasetBasedOnPatientsCases(DatasetSplittingType.kFOLD, 10)
-kfoldData, kfoldLabel = dataset.get_kFoldDataWithLabels()
+# Analyse Dataset
+diagnosedSlices = dataset.countHealthyAndSickSliceDistribution()
+piePlot(diagnosedSlices, ['Normalne', 'Z krwotokiem'], "Procentowy rozkład przekrojów w zbiorze")
+genderCounter = dataset.countGenderDistribution()
+piePlot(genderCounter, ['Mężczyźni', 'Kobiety'], "Procentowy rozkład płci w zbiorze")
+ageCounter = dataset.countAgeDistribution()
+plotHistogram(ageCounter, "Rozkład wieku", "Wiek", "Liczba przypadków")
 
+# Split dataset using chosen method
+####  2/3 sets splitting
+# dataset.splitDatasetBasedOnPatientsCases(DatasetSplittingType.TRAIN_VAL_TEST)
+# trainData, trainLabels = dataset.get_trainDataWithLabels()
+# testData, testLabels = dataset.get_testDataWithLabels()
+# valData, valLabels = dataset.get_valDataWithLabels()
+# ####  stratified k - fold
+# dataset.splitDatasetBasedOnPatientsCases(DatasetSplittingType.kFOLD, 10)
+# kfoldData, kfoldLabel = dataset.get_kFoldDataWithLabels()
 
     
