@@ -19,6 +19,10 @@ from matplotlib.pyplot import figure
 import random
 import cv2
 from skimage.feature import local_binary_pattern
+from sklearn import metrics
+from sklearn.pipeline import make_pipeline
+from sklearn.preprocessing import StandardScaler
+from sklearn.svm import SVC
 
 TEST_SET_SIZE = 0.3 # 1 - TEST_SET_SIZE (70%) - training set, TEST_SET_SIZE (30%) testing set
 VAL_SET_SIZE = 0.5  # 50% of testing set, it means     
@@ -188,7 +192,62 @@ class HemorrageDataset:
 
 
          
-# Create class for ml method - load images, preprocess, choose method and fit model 
+class Classification:
+    def __init__(self, train_data, train_label, test_data, test_label):
+        self.train_data = train_data
+        self.train_images = []
+        self.train_label = train_label
+        self.test_data = test_data
+        self.test_images = []
+        self.test_label = test_label
+
+    def __featuresLBP(self, path):
+        image = cv2.imread(path)
+        gray = cv2.cvtColor(image, cv2.COLOR_BGR2GRAY)
+        numPoints = 8 
+        radius = 1
+        lbp = local_binary_pattern(gray, numPoints, radius, method="uniform")
+        (hist, _) = np.histogram(lbp.ravel(), bins=np.arange(0, numPoints +3),range=(0, numPoints + 2))
+        hist = hist.astype("float")
+        hist /= (hist.sum() + 1e-7)
+        return hist 
+        
+    def __preprocessData(self):
+        for elem in self.train_data:
+            pathToImage = createPath(basePath, elem)
+            histogram = self.__featuresLBP(pathToImage)
+            self.train_images.append(histogram)
+        for elem in self.test_data:
+            pathToImage = createPath(basePath, elem)
+            histogram = self.__featuresLBP(pathToImage)
+            self.test_images.append(histogram)
+
+    def __svm(self):    
+        clf = make_pipeline(StandardScaler(), SVC(gamma='auto', kernel='sigmoid', class_weight='balanced'))
+        clf.fit(self.train_images, self.train_label)
+        return clf
+
+    def __svm_classification(self):
+        clf = self.__svm()
+        predicted = clf.predict(self.test_images)
+        return predicted
+
+    def calculate_accuracy(self, classifier="svm"):
+        self.__preprocessData()
+        if classifier == "svm":
+            predicted = self.__svm_classification()
+        false = 0
+        for i in range(0, len(self.test_label)):
+            if self.test_label[i] != predicted[i]:
+                false = false + 1
+
+        accuracy = 100 - ((false/len(self.test_label))*100)
+        
+        confusion_matrix = metrics.confusion_matrix(self.test_label, predicted)
+        cm_display = metrics.ConfusionMatrixDisplay(confusion_matrix = confusion_matrix, display_labels = ['no hemmorhage', 'hemmorhage'])
+        print('Accuracy: ', accuracy)
+        return accuracy
+
 # another class for statistic and visualization -> acces private property: self._Parent__private(), self.__demographyCSV = pd.read_csv(demographyCsvPath)
 # generator for all
 # for imbalanced dataset: https://machinelearningmastery.com/cost-sensitive-svm-for-imbalanced-classification/
@@ -216,26 +275,15 @@ plotHistogram(ageCounter, "Rozkład wieku", "Wiek", "Liczba przypadków")
 
 # Split dataset using chosen method
 ####  2/3 sets splitting
-dataset.splitDatasetBasedOnPatientsCases(DatasetSplittingType.TRAIN_VAL_TEST)
+dataset.splitDatasetBasedOnPatientsCases(DatasetSplittingType.TRAIN_TEST)
 trainData, trainLabels = dataset.get_trainDataWithLabels()
 testData, testLabels = dataset.get_testDataWithLabels()
-valData, valLabels = dataset.get_valDataWithLabels()
 
 # ####  stratified k - fold
 # dataset.splitDatasetBasedOnPatientsCases(DatasetSplittingType.kFOLD, 10)
 # kfoldData, kfoldLabel = dataset.get_kFoldDataWithLabels()
 
-for i in range(0,10):
-    tempPath = createPath(basePath, trainData[i])
-    image = cv2.imread(tempPath)
-    plt.imshow(image)
-    plt.show()
-    
-    gray = cv2.cvtColor(image, cv2.COLOR_BGR2GRAY)
-    numPoints = 8 
-    radius = 1
-    lbp = local_binary_pattern(gray, numPoints, radius, method="uniform")
-    (hist, _) = np.histogram(lbp.ravel(),  bins=np.arange(0, numPoints + 3), range=(0, numPoints + 2))
-    hist = hist.astype("float")
-    hist /= (hist.sum() + 1e-7)
-    plt.plot(hist)
+MLClassifier = Classification(trainData, trainLabels, testData, testLabels)
+svm_accuracy = MLClassifier.calculate_accuracy("svm")
+
+
