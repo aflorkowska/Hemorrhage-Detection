@@ -16,10 +16,28 @@ from dataclasses import dataclass
 from sklearn.model_selection import StratifiedKFold
 import matplotlib.pyplot as plt
 from matplotlib.pyplot import figure
+import random
+import cv2
+from skimage.feature import local_binary_pattern
 
 TEST_SET_SIZE = 0.3 # 1 - TEST_SET_SIZE (70%) - training set, TEST_SET_SIZE (30%) testing set
 VAL_SET_SIZE = 0.5  # 50% of testing set, it means     
                     # TEST_SET_SIZE / 2 (15%) - testing set, TEST_SET_SIZE / 2 (15%) validation set
+
+def shuffleData(set1, set2):
+    temp = list(zip(set1, set2))
+    random.shuffle(temp)
+    res1, res2 = zip(*temp)
+    res1, res2 = list(res1), list(res2)
+    return res1,res2
+
+def createPath(mainPath, patAndSlice):
+    if patAndSlice[0] < 100:
+        patientNumString = '0' + str(patAndSlice[0])
+    else:
+        patientNumString = str(patAndSlice[0])
+    finalPath = mainPath + '\Patients_CT\\' + patientNumString + '\\brain\\' + str(patAndSlice[1]) + '.jpg'    
+    return finalPath
 
 def swap_target(x):
     if x == 0:
@@ -114,7 +132,7 @@ class HemorrageDataset:
                 data.append((patientNum, sliceNum))
                 labels.append(diagnose)
                 
-        return data, labels
+        return shuffleData(data, labels)
     
     def splitDatasetBasedOnPatientsCases(self, splittingType, kFold = 0):
          healthyPatientsNumbers, sickPatientsNumbers = self.__distinquishHealthyAndSickCases()
@@ -179,10 +197,14 @@ class HemorrageDataset:
 basePath  = r'D:\Brain_JPG_Hemmorage\computed-tomography-images-for-intracranial-hemorrhage-detection-and-segmentation-1.0.0'
 diagnoseCsvPath = basePath + '\hemorrhage_diagnosis.csv'
 demographyCsvPath = basePath + '\patient_demographics.csv'
+images = basePath + '\Patients_CT'
 dataset = HemorrageDataset(diagnoseCsvPath, demographyCsvPath, basePath) 
+
 # Prepare csv file  
 dataset.removeRecordFromDataset(84, 36)
 dataset.invertBinaryValues('No_Hemorrhage', 'Has_Hemorrhage')
+
+'''
 # Analyse Dataset
 diagnosedSlices = dataset.countHealthyAndSickSliceDistribution()
 piePlot(diagnosedSlices, ['Normalne', 'Z krwotokiem'], "Procentowy rozkład przekrojów w zbiorze")
@@ -190,15 +212,30 @@ genderCounter = dataset.countGenderDistribution()
 piePlot(genderCounter, ['Mężczyźni', 'Kobiety'], "Procentowy rozkład płci w zbiorze")
 ageCounter = dataset.countAgeDistribution()
 plotHistogram(ageCounter, "Rozkład wieku", "Wiek", "Liczba przypadków")
+'''
 
 # Split dataset using chosen method
 ####  2/3 sets splitting
-# dataset.splitDatasetBasedOnPatientsCases(DatasetSplittingType.TRAIN_VAL_TEST)
-# trainData, trainLabels = dataset.get_trainDataWithLabels()
-# testData, testLabels = dataset.get_testDataWithLabels()
-# valData, valLabels = dataset.get_valDataWithLabels()
+dataset.splitDatasetBasedOnPatientsCases(DatasetSplittingType.TRAIN_VAL_TEST)
+trainData, trainLabels = dataset.get_trainDataWithLabels()
+testData, testLabels = dataset.get_testDataWithLabels()
+valData, valLabels = dataset.get_valDataWithLabels()
+
 # ####  stratified k - fold
 # dataset.splitDatasetBasedOnPatientsCases(DatasetSplittingType.kFOLD, 10)
 # kfoldData, kfoldLabel = dataset.get_kFoldDataWithLabels()
 
+for i in range(0,10):
+    tempPath = createPath(basePath, trainData[i])
+    image = cv2.imread(tempPath)
+    plt.imshow(image)
+    plt.show()
     
+    gray = cv2.cvtColor(image, cv2.COLOR_BGR2GRAY)
+    numPoints = 8 
+    radius = 1
+    lbp = local_binary_pattern(gray, numPoints, radius, method="uniform")
+    (hist, _) = np.histogram(lbp.ravel(),  bins=np.arange(0, numPoints + 3), range=(0, numPoints + 2))
+    hist = hist.astype("float")
+    hist /= (hist.sum() + 1e-7)
+    plt.plot(hist)
